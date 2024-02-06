@@ -13,7 +13,8 @@ import { EOL } from 'node:os'
  * Core implementation of the stacks feature in Edge
  */
 export default class Stacks {
-  #placeholders: Map<string, string[]> = new Map()
+  #placeholders: Set<string> = new Set()
+  #stackContent: Map<string, string[]> = new Map()
 
   /**
    * Returns the placeholder name for a given stack
@@ -30,8 +31,11 @@ export default class Stacks {
     if (this.#placeholders.has(name)) {
       throw new Error(`Cannot declare stack "${name}" for multiple times`)
     }
+    this.#placeholders.add(name)
 
-    this.#placeholders.set(name, [])
+    if (!this.#stackContent.has(name)) {
+      this.#stackContent.set(name, [])
+    }
     return this.#createPlaceholder(name)
   }
 
@@ -39,18 +43,13 @@ export default class Stacks {
    * Push content inside a given stack
    */
   pushTo(name: string, contents: string) {
-    const placeholder = this.#placeholders.get(name)
-    if (!placeholder) {
-      throw new Error(
-        `Cannot push to non-existing stack named "${name}". Use "@stack('${name}')" to first create a stack`
-      )
-    }
-
+    const existingContent = this.#stackContent.get(name) ?? []
     /**
      * Defined content for the unique key inside a given
      * stack
      */
-    placeholder.push(contents)
+    this.#stackContent.set(name, [...existingContent, contents])
+
     return this
   }
 
@@ -58,8 +57,14 @@ export default class Stacks {
    * Replace placeholders from a string with the stacks value
    */
   replacePlaceholders(contents: string) {
-    for (let [name, sources] of this.#placeholders) {
-      contents = contents.replace(this.#createPlaceholder(name), sources.join(EOL))
+    for (let [name, sources] of this.#stackContent) {
+      if (this.#placeholders.has(name)) {
+        contents = contents.replace(this.#createPlaceholder(name), sources.join(EOL))
+      } else {
+        throw new Error(
+          `Cannot push to non-existing stack named "${name}". Use "@stack('${name}')" to first create a stack`
+        )
+      }
     }
 
     return contents
